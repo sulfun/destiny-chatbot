@@ -532,7 +532,7 @@ def page_reading():
 
     # 채팅 히스토리 표시
     for msg in st.session_state.chat_history:
-        with st.chat_message(msg["role"], avatar="◈" if msg["role"] == "assistant" else None):
+        with st.chat_message(msg["role"], avatar="🔮" if msg["role"] == "assistant" else None):
             st.markdown(msg["content"])
 
     # 첫 리딩이면 자동 실행
@@ -543,7 +543,7 @@ def page_reading():
 
         system_prompt, user_prompt = get_prompt(mode, user)
 
-        with st.chat_message("assistant", avatar="◈"):
+        with st.chat_message("assistant", avatar="🔮"):
             response_placeholder = st.empty()
             full_response = ""
 
@@ -578,7 +578,7 @@ def page_reading():
                 "충전하거나, 열두 체계 전체를 한 권에 담은 "
                 "[운명책](https://destiny-book.streamlit.app)을 확인해봐."
             )
-            with st.chat_message("assistant", avatar="◈"):
+            with st.chat_message("assistant", avatar="🔮"):
                 st.markdown(no_credit_msg)
             st.session_state.chat_history.append({
                 "role": "assistant",
@@ -596,7 +596,7 @@ def page_reading():
                 question=question,
             )
 
-            with st.chat_message("assistant", avatar="◈"):
+            with st.chat_message("assistant", avatar="🔮"):
                 response_placeholder = st.empty()
                 full_response = ""
 
