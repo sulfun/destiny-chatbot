@@ -181,8 +181,9 @@ UPSELL_MESSAGE = """
 삶의 10원칙과 향후 10년의 운의 흐름까지.
 
 한 사람당 한 권. 두 번 만들지 않는다.
+운명책은 서브스택 연간 구독자만 신청할 수 있다.
 
-→ 운명책 알아보기: https://destiny-book.streamlit.app
+→ 서브스택 구독하기: https://lifeonearthlog.substack.com
 
 ━━━━━━━━━━━━━━━━━━━━━━
 """
@@ -217,11 +218,12 @@ def get_prompt(mode: str, user_data: dict, **kwargs) -> tuple[str, str]:
 
 
 # 모드별 크레딧 비용
+# 10크레딧 무료 → 리딩 1회 7크레딧 → 1회 후 3남음 → 반드시 충전 필요
 CREDIT_COSTS = {
-    "past_life": 1,
-    "keywords": 1,
-    "daily": 1,
-    "deep_dive": 1,
+    "past_life": 7,
+    "keywords": 7,
+    "daily": 7,
+    "deep_dive": 3,
 }
 
 # 모드별 한글 이름

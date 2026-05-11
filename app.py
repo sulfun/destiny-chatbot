@@ -227,7 +227,7 @@ hr {
 # 세션 상태 초기화
 # ─────────────────────────────────────────────
 if "credits" not in st.session_state:
-    st.session_state.credits = 3  # 무료 크레딧
+    st.session_state.credits = 10  # 무료 크레딧 10개 (리딩 1회 = 7크레딧)
 
 if "user_data" not in st.session_state:
     st.session_state.user_data = None
@@ -362,7 +362,7 @@ def page_intro():
     st.markdown("")
     st.markdown(
         '<p style="text-align:center; color:#a090b8; font-size:13px;">'
-        '무료 크레딧 3개 제공 · 각 리딩 1크레딧'
+        '무료 크레딧 10개 제공 · 리딩 1회 7크레딧'
         '</p>',
         unsafe_allow_html=True
     )
@@ -463,7 +463,7 @@ def page_select_mode():
 
     with col1:
         if st.button("🔮\n전생 리딩", use_container_width=True):
-            if st.session_state.credits >= 1:
+            if st.session_state.credits >= 7:
                 st.session_state.current_mode = "past_life"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -473,7 +473,7 @@ def page_select_mode():
 
     with col2:
         if st.button("◈\n운명 키워드", use_container_width=True):
-            if st.session_state.credits >= 1:
+            if st.session_state.credits >= 7:
                 st.session_state.current_mode = "keywords"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -483,7 +483,7 @@ def page_select_mode():
 
     with col3:
         if st.button("☀\n오늘의 설계도", use_container_width=True):
-            if st.session_state.credits >= 1:
+            if st.session_state.credits >= 7:
                 st.session_state.current_mode = "daily"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -501,17 +501,17 @@ def page_select_mode():
             unsafe_allow_html=True
         )
 
-    # 5회 이상 리딩 시 운명책 업셀
-    if st.session_state.readings_done >= 3:
+    # 2회 이상 리딩 시 서브스택 + 운명책 업셀
+    if st.session_state.readings_done >= 2:
         st.markdown("---")
         st.markdown(
             '<div class="upsell-box">'
             '<p style="color:#C5A0F0; font-size:14px; margin-bottom:8px;">여기서 읽은 건 밑그림의 밑그림이다.</p>'
-            '<p style="color:#a090b8; font-size:13px; margin-bottom:12px;">'
-            '열두 체계 전체를 한 권에 — 운명책'
+            '<p style="color:#a090b8; font-size:13px; margin-bottom:8px;">'
+            '운명책은 서브스택 연간 구독자만 신청할 수 있다.'
             '</p>'
-            '<a href="https://destiny-book.streamlit.app" target="_blank" '
-            'style="color:#C5A0F0; font-size:15px; font-weight:600;">운명책 알아보기 →</a>'
+            '<a href="https://lifeonearthlog.substack.com" target="_blank" '
+            'style="color:#C5A0F0; font-size:15px; font-weight:600;">서브스택 구독하기 →</a>'
             '</div>',
             unsafe_allow_html=True
         )
@@ -562,7 +562,7 @@ def page_reading():
         st.rerun()
 
     # 심화 질문 입력
-    if question := st.chat_input("더 궁금한 게 있어? (심화 분석 1크레딧)"):
+    if question := st.chat_input("더 궁금한 게 있어? (심화 분석 3크레딧)"):
         # 유저 메시지 표시
         with st.chat_message("user"):
             st.markdown(question)
@@ -572,11 +572,12 @@ def page_reading():
         })
 
         # 크레딧 체크
-        if st.session_state.credits < 1:
+        if st.session_state.credits < 3:
             no_credit_msg = (
                 "크레딧이 부족하다.\n\n"
-                "충전하거나, 열두 체계 전체를 한 권에 담은 "
-                "[운명책](https://destiny-book.streamlit.app)을 확인해봐."
+                "충전하고 다시 와. "
+                "아니면 열두 체계 전체를 한 권에 담은 운명책이라는 방법도 있다.\n\n"
+                "운명책은 [서브스택 연간 구독자](https://lifeonearthlog.substack.com) 만 신청할 수 있다."
             )
             with st.chat_message("assistant", avatar="🔮"):
                 st.markdown(no_credit_msg)
@@ -586,7 +587,7 @@ def page_reading():
             })
         else:
             # 심화 분석 실행
-            st.session_state.credits -= 1
+            st.session_state.credits -= 3
             st.session_state.readings_done += 1
 
             system_prompt, user_prompt = get_prompt(
@@ -642,8 +643,8 @@ def page_no_credits():
 
     st.markdown(
         '<p style="text-align:center; color:#d4c5e8; font-size:15px; line-height:2;">'
-        '무료 크레딧 3개를 모두 사용했습니다.<br>'
-        '더 깊이 읽고 싶다면 크레딧을 충전하세요.'
+        '한 번 맛봤으면 알 거다. 밑그림은 한 번 읽는 게 아니라 계속 읽는 거다.<br>'
+        '크레딧을 충전하고 나머지도 확인해라.'
         '</p>',
         unsafe_allow_html=True
     )
@@ -653,18 +654,18 @@ def page_no_credits():
     # 크레딧 충전 옵션
     st.markdown("#### 크레딧 충전")
 
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
 
     with col1:
         st.markdown(
-            '<div class="mode-card" style="text-align:center;">'
+            '<div class="mode-card" style="text-align:center; border-color:#C5A0F066;">'
             '<h4>10 크레딧</h4>'
-            '<p style="color:#C5A0F0; font-size:1.3rem; font-weight:700;">₩4,900</p>'
-            '<p style="font-size:0.8rem;">크레딧당 ₩490</p>'
+            '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩1,000</p>'
+            '<p style="font-size:0.85rem; color:#a090b8;">리딩 1회 + 심화 질문 1회</p>'
             '</div>',
             unsafe_allow_html=True
         )
-        if st.button("충전하기 (10)", use_container_width=True, key="buy_10"):
+        if st.button("충전하기", use_container_width=True, key="buy_10"):
             # TODO: 결제 연동 (Stripe/토스)
             st.session_state.credits += 10
             st.session_state.page = "select_mode"
@@ -672,55 +673,78 @@ def page_no_credits():
 
     with col2:
         st.markdown(
-            '<div class="mode-card" style="text-align:center; border-color:#C5A0F066;">'
-            '<h4>25 크레딧</h4>'
-            '<p style="color:#C5A0F0; font-size:1.3rem; font-weight:700;">₩9,900</p>'
-            '<p style="font-size:0.8rem;">크레딧당 ₩396</p>'
-            '</div>',
-            unsafe_allow_html=True
-        )
-        if st.button("충전하기 (25)", use_container_width=True, key="buy_25"):
-            # TODO: 결제 연동
-            st.session_state.credits += 25
-            st.session_state.page = "select_mode"
-            st.rerun()
-
-    with col3:
-        st.markdown(
             '<div class="mode-card" style="text-align:center;">'
-            '<h4>월 구독</h4>'
-            '<p style="color:#C5A0F0; font-size:1.3rem; font-weight:700;">₩14,900/월</p>'
-            '<p style="font-size:0.8rem;">매일 1회 무료 + 할인</p>'
+            '<h4>30 크레딧</h4>'
+            '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩2,500</p>'
+            '<p style="font-size:0.85rem; color:#a090b8;">리딩 4회 + 심화 질문</p>'
             '</div>',
             unsafe_allow_html=True
         )
-        if st.button("구독하기", use_container_width=True, key="subscribe"):
-            # TODO: 구독 결제 연동
+        if st.button("충전하기 (30)", use_container_width=True, key="buy_30"):
+            # TODO: 결제 연동
             st.session_state.credits += 30
             st.session_state.page = "select_mode"
             st.rerun()
 
+    st.markdown("")
+    st.markdown(
+        '<p style="text-align:center; color:#a090b8; font-size:12px;">'
+        '오늘의 설계도는 매일 새로 바뀝니다. 매일 확인하세요.'
+        '</p>',
+        unsafe_allow_html=True
+    )
+
     st.markdown("---")
 
-    # 운명책 업셀
+    # 서브스택 구독 안내
     st.markdown(
         '<div class="upsell-box">'
-        '<p style="color:#C5A0F0; font-size:16px; font-weight:600; margin-bottom:8px;">'
-        '아니면, 한 번에 전부 읽는 방법이 있다.'
+        '<p style="color:#C5A0F0; font-size:18px; font-weight:700; margin-bottom:10px;">'
+        '더 깊이 들어가는 방법'
         '</p>'
-        '<p style="color:#a090b8; font-size:14px; margin-bottom:12px;">'
-        '열두 체계 전체를 교차 분석해서 당신의 설계 논리를 한 권에 담는다.<br>'
-        '삶의 10원칙 + 향후 10년 운의 흐름까지.'
+        '<p style="color:#d4c5e8; font-size:14px; margin-bottom:16px; line-height:1.8;">'
+        'The Architect의 서브스택을 구독하면<br>'
+        '운명학 인사이트를 매주 받아볼 수 있다.'
         '</p>'
-        '<p style="margin-bottom:4px;">'
-        '<a href="https://destiny-book.streamlit.app" target="_blank" '
-        'style="color:#C5A0F0; font-size:17px; font-weight:700;">운명책 알아보기 →</a>'
-        '</p>'
-        '<p style="color:#a090b8; font-size:12px;">한 사람당 한 권. 두 번 만들지 않는다.</p>'
+        '<div style="display:flex; justify-content:center; gap:20px; margin-bottom:16px;">'
+        '<div style="text-align:center;">'
+        '<p style="color:#a090b8; font-size:12px; margin:0;">월간 구독</p>'
+        '<p style="color:#C5A0F0; font-size:1.3rem; font-weight:700; margin:4px 0;">$5/월</p>'
+        '</div>'
+        '<div style="text-align:center;">'
+        '<p style="color:#a090b8; font-size:12px; margin:0;">연간 구독</p>'
+        '<p style="color:#C5A0F0; font-size:1.3rem; font-weight:700; margin:4px 0;">$50/년</p>'
+        '</div>'
+        '</div>'
+        '<a href="https://lifeonearthlog.substack.com" target="_blank" '
+        'style="color:#C5A0F0; font-size:15px; font-weight:600;">서브스택 구독하기 →</a>'
         '</div>',
         unsafe_allow_html=True
     )
 
+    st.markdown("")
+
+    # 운명책 — 연간 구독자 전용
+    st.markdown(
+        '<div class="upsell-box" style="border-color:#C5A0F055;">'
+        '<p style="color:#C5A0F0; font-size:16px; font-weight:700; margin-bottom:8px;">'
+        '운명책 — 연간 구독자 전용'
+        '</p>'
+        '<p style="color:#a090b8; font-size:14px; margin-bottom:12px; line-height:1.7;">'
+        '열두 체계 전체를 교차 분석해서 당신의 설계 논리를 한 권에 담는다.<br>'
+        '삶의 10원칙 + 향후 10년 운의 흐름까지.<br>'
+        '한 사람당 한 권. 두 번 만들지 않는다.'
+        '</p>'
+        '<p style="color:#d4c5e8; font-size:13px; margin-bottom:8px;">'
+        '서브스택 연간 구독($50/년) 이상만 신청 가능'
+        '</p>'
+        '<a href="https://lifeonearthlog.substack.com" target="_blank" '
+        'style="color:#C5A0F0; font-size:15px; font-weight:600;">서브스택에서 연간 구독하기 →</a>'
+        '</div>',
+        unsafe_allow_html=True
+    )
+
+    st.markdown("")
     if st.button("← 돌아가기", use_container_width=True):
         st.session_state.page = "select_mode"
         st.rerun()
