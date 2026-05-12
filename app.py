@@ -227,7 +227,7 @@ hr {
 # 세션 상태 초기화
 # ─────────────────────────────────────────────
 if "credits" not in st.session_state:
-    st.session_state.credits = 10  # 무료 크레딧 10개 (리딩 1회 = 7크레딧)
+    st.session_state.credits = 10  # 무료 벽돌 10개 (리딩 1회 = 벽돌 7개)
 
 if "user_data" not in st.session_state:
     st.session_state.user_data = None
@@ -290,14 +290,14 @@ def show_credits():
     if credits > 0:
         st.markdown(
             f'<div style="text-align:right;">'
-            f'<span class="credit-badge">◈ 크레딧: {credits}</span>'
+            f'<span class="credit-badge">🧱 벽돌: {credits}개</span>'
             f'</div>',
             unsafe_allow_html=True
         )
     else:
         st.markdown(
             f'<div style="text-align:right;">'
-            f'<span class="credit-badge" style="border-color:#ff6b6b44;color:#ff6b6b;">◈ 크레딧: 0</span>'
+            f'<span class="credit-badge" style="border-color:#ff6b6b44;color:#ff6b6b;">🧱 벽돌: 0개</span>'
             f'</div>',
             unsafe_allow_html=True
         )
@@ -365,7 +365,7 @@ def page_intro():
     st.markdown("")
     st.markdown(
         '<p style="text-align:center; color:#a090b8; font-size:13px;">'
-        '무료 크레딧 10개 제공 · 리딩 1회 7크레딧'
+        '🧱 무료 벽돌 10개 제공 · 리딩 1회 벽돌 7개'
         '</p>',
         unsafe_allow_html=True
     )
@@ -499,7 +499,7 @@ def page_select_mode():
         st.markdown("---")
         st.markdown(
             f'<p style="color:#a090b8; font-size:13px; text-align:center;">'
-            f'지금까지 {st.session_state.readings_done}회 리딩 완료'
+            f'🧱 지금까지 {st.session_state.readings_done}회 리딩 · 벽돌 {st.session_state.credits}개 남음'
             f'</p>',
             unsafe_allow_html=True
         )
@@ -565,7 +565,7 @@ def page_reading():
         st.rerun()
 
     # 심화 질문 입력
-    if question := st.chat_input("더 궁금한 게 있어? (심화 분석 3크레딧)"):
+    if question := st.chat_input("더 궁금한 게 있어? (심화 분석 벽돌 3개)"):
         # 유저 메시지 표시
         with st.chat_message("user"):
             st.markdown(question)
@@ -577,7 +577,7 @@ def page_reading():
         # 크레딧 체크
         if st.session_state.credits < 3:
             no_credit_msg = (
-                "크레딧이 부족하다.\n\n"
+                "🧱 벽돌이 부족하다.\n\n"
                 "충전하고 다시 와. "
                 "아니면 열두 체계 전체를 한 권에 담은 운명책이라는 방법도 있다.\n\n"
                 "운명책은 [서브스택 연간 구독자](https://lifeonearthlog.substack.com) 만 신청할 수 있다."
@@ -641,58 +641,76 @@ def page_reading():
 # ─────────────────────────────────────────────
 def page_no_credits():
     st.markdown('<div class="architect-symbol">◈</div>', unsafe_allow_html=True)
-    st.markdown("### 크레딧이 부족합니다")
+    st.markdown("### 🧱 벽돌이 부족합니다")
     st.markdown("---")
 
     st.markdown(
         '<p style="text-align:center; color:#d4c5e8; font-size:15px; line-height:2;">'
         '한 번 맛봤으면 알 거다. 밑그림은 한 번 읽는 게 아니라 계속 읽는 거다.<br>'
-        '크레딧을 충전하고 나머지도 확인해라.'
+        '벽돌을 충전하고 나머지도 확인해라. 🧱'
         '</p>',
         unsafe_allow_html=True
     )
 
     st.markdown("")
 
-    # 크레딧 충전 옵션
-    st.markdown("#### 크레딧 충전")
+    # 벽돌 충전 옵션
+    st.markdown("#### 🧱 벽돌 충전")
 
-    col1, col2 = st.columns(2)
+    col1, col2, col3 = st.columns(3)
 
     with col1:
         st.markdown(
-            '<div class="mode-card" style="text-align:center; border-color:#C5A0F066;">'
-            '<h4>10 크레딧</h4>'
+            '<div class="mode-card" style="text-align:center;">'
+            '<p style="font-size:2rem; margin:0;">🧱</p>'
+            '<h4>벽돌 1개</h4>'
             '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩1,000</p>'
-            '<p style="font-size:0.85rem; color:#a090b8;">리딩 1회 + 심화 질문 1회</p>'
+            '<p style="font-size:0.8rem; color:#a090b8;">맛보기용</p>'
             '</div>',
             unsafe_allow_html=True
         )
-        if st.button("충전하기", use_container_width=True, key="buy_10"):
+        if st.button("1개 충전", use_container_width=True, key="buy_1"):
             # TODO: 결제 연동 (Stripe/토스)
-            st.session_state.credits += 10
+            st.session_state.credits += 1
             st.session_state.page = "select_mode"
             st.rerun()
 
     with col2:
         st.markdown(
-            '<div class="mode-card" style="text-align:center;">'
-            '<h4>30 크레딧</h4>'
-            '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩2,500</p>'
-            '<p style="font-size:0.85rem; color:#a090b8;">리딩 4회 + 심화 질문</p>'
+            '<div class="mode-card" style="text-align:center; border-color:#C5A0F066;">'
+            '<p style="font-size:2rem; margin:0;">🏗️</p>'
+            '<h4>벽돌 10개</h4>'
+            '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩9,500</p>'
+            '<p style="font-size:0.8rem; color:#a090b8;">5% 할인</p>'
             '</div>',
             unsafe_allow_html=True
         )
-        if st.button("충전하기 (30)", use_container_width=True, key="buy_30"):
+        if st.button("10개 충전", use_container_width=True, key="buy_10"):
             # TODO: 결제 연동
-            st.session_state.credits += 30
+            st.session_state.credits += 10
+            st.session_state.page = "select_mode"
+            st.rerun()
+
+    with col3:
+        st.markdown(
+            '<div class="mode-card" style="text-align:center;">'
+            '<p style="font-size:2rem; margin:0;">🏛️</p>'
+            '<h4>벽돌 20개</h4>'
+            '<p style="color:#C5A0F0; font-size:1.5rem; font-weight:700;">₩17,900</p>'
+            '<p style="font-size:0.8rem; color:#a090b8;">10% 할인</p>'
+            '</div>',
+            unsafe_allow_html=True
+        )
+        if st.button("20개 충전", use_container_width=True, key="buy_20"):
+            # TODO: 결제 연동
+            st.session_state.credits += 20
             st.session_state.page = "select_mode"
             st.rerun()
 
     st.markdown("")
     st.markdown(
         '<p style="text-align:center; color:#a090b8; font-size:12px;">'
-        '오늘의 설계도는 매일 새로 바뀝니다. 매일 확인하세요.'
+        '오늘의 설계도는 매일 새로 바뀝니다. 매일 와서 벽돌 쌓으세요. 🧱'
         '</p>',
         unsafe_allow_html=True
     )
