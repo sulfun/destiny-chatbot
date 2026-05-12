@@ -334,7 +334,8 @@ def page_intro():
 
     with col1:
         st.markdown(
-            '<div class="mode-card">'
+            '<div class="mode-card" style="text-align:center;">'
+            '<p style="font-size:2.5rem; margin:0 0 8px 0;">🪞</p>'
             '<h4>전생 리딩</h4>'
             '<p>당신의 전생 — 시대, 역할, 이번 생에 가져온 것</p>'
             '</div>',
@@ -343,7 +344,8 @@ def page_intro():
 
     with col2:
         st.markdown(
-            '<div class="mode-card">'
+            '<div class="mode-card" style="text-align:center;">'
+            '<p style="font-size:2.5rem; margin:0 0 8px 0;">🔑</p>'
             '<h4>운명 키워드</h4>'
             '<p>본질, 무기, 함정 — 세 개의 키워드로 압축</p>'
             '</div>',
@@ -352,7 +354,8 @@ def page_intro():
 
     with col3:
         st.markdown(
-            '<div class="mode-card">'
+            '<div class="mode-card" style="text-align:center;">'
+            '<p style="font-size:2.5rem; margin:0 0 8px 0;">🌅</p>'
             '<h4>오늘의 설계도</h4>'
             '<p>오늘 하루의 에너지 흐름 — 밀 때와 빠질 때</p>'
             '</div>',
@@ -462,7 +465,7 @@ def page_select_mode():
     col1, col2, col3 = st.columns(3)
 
     with col1:
-        if st.button("🔮\n전생 리딩", use_container_width=True):
+        if st.button("🪞 전생 리딩", use_container_width=True):
             if st.session_state.credits >= 7:
                 st.session_state.current_mode = "past_life"
                 st.session_state.page = "reading"
@@ -472,7 +475,7 @@ def page_select_mode():
                 st.rerun()
 
     with col2:
-        if st.button("◈\n운명 키워드", use_container_width=True):
+        if st.button("🔑 운명 키워드", use_container_width=True):
             if st.session_state.credits >= 7:
                 st.session_state.current_mode = "keywords"
                 st.session_state.page = "reading"
@@ -482,7 +485,7 @@ def page_select_mode():
                 st.rerun()
 
     with col3:
-        if st.button("☀\n오늘의 설계도", use_container_width=True):
+        if st.button("🌅 오늘의 설계도", use_container_width=True):
             if st.session_state.credits >= 7:
                 st.session_state.current_mode = "daily"
                 st.session_state.page = "reading"
