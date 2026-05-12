@@ -9,6 +9,11 @@ from datetime import datetime, date
 from prompts import (
     get_prompt, CREDIT_COSTS, MODE_NAMES, MODE_DESCRIPTIONS, UPSELL_MESSAGE
 )
+from database import (
+    get_or_create_user, get_bricks, use_bricks, add_bricks,
+    save_reading, get_reading_count
+)
+from payments import create_checkout_session, verify_payment
 
 # ─────────────────────────────────────────────
 # 페이지 설정
@@ -224,13 +229,22 @@ hr {
 
 
 # ─────────────────────────────────────────────
+# Supabase 사용 여부 (키가 없으면 세션 모드로 폴백)
+# ─────────────────────────────────────────────
+USE_SUPABASE = all(k in st.secrets for k in ["SUPABASE_URL", "SUPABASE_SERVICE_KEY"])
+USE_STRIPE = all(k in st.secrets for k in ["STRIPE_SECRET_KEY"])
+
+# ─────────────────────────────────────────────
 # 세션 상태 초기화
 # ─────────────────────────────────────────────
 if "credits" not in st.session_state:
-    st.session_state.credits = 10  # 무료 벽돌 10개 (리딩 1회 = 벽돌 7개)
+    st.session_state.credits = 10  # 무료 벽돌 10개 (폴백용)
 
 if "user_data" not in st.session_state:
     st.session_state.user_data = None
+
+if "db_user" not in st.session_state:
+    st.session_state.db_user = None  # Supabase 사용자 레코드
 
 if "current_mode" not in st.session_state:
     st.session_state.current_mode = None
@@ -246,6 +260,50 @@ if "last_reading" not in st.session_state:
 
 if "page" not in st.session_state:
     st.session_state.page = "intro"
+
+# ─────────────────────────────────────────────
+# 결제 완료 콜백 처리 (Stripe redirect)
+# ─────────────────────────────────────────────
+query_params = st.query_params
+if query_params.get("payment") == "success" and USE_STRIPE:
+    session_id = query_params.get("session_id", "")
+    if session_id and st.session_state.db_user:
+        payment_info = verify_payment(session_id)
+        if payment_info:
+            add_bricks(
+                user_id=payment_info["user_id"],
+                amount=payment_info["bricks"],
+                reason=f"purchase_{payment_info['product_key']}",
+                stripe_session_id=payment_info["session_id"],
+            )
+            # 세션 벽돌도 동기화
+            st.session_state.credits = get_bricks(payment_info["user_id"])
+            st.query_params.clear()
+            st.toast(f"🧱 벽돌 {payment_info['bricks']}개 충전 완료!")
+
+
+# ─────────────────────────────────────────────
+# 벽돌 헬퍼 (Supabase or 세션)
+# ─────────────────────────────────────────────
+def get_current_bricks() -> int:
+    """현재 벽돌 수 (DB 또는 세션)"""
+    if USE_SUPABASE and st.session_state.db_user:
+        return get_bricks(st.session_state.db_user["id"])
+    return st.session_state.credits
+
+
+def spend_bricks(amount: int, reason: str) -> bool:
+    """벽돌 사용 (DB 또는 세션)"""
+    if USE_SUPABASE and st.session_state.db_user:
+        success = use_bricks(st.session_state.db_user["id"], amount, reason)
+        if success:
+            st.session_state.credits = get_bricks(st.session_state.db_user["id"])
+        return success
+    else:
+        if st.session_state.credits >= amount:
+            st.session_state.credits -= amount
+            return True
+        return False
 
 
 # ─────────────────────────────────────────────
@@ -286,7 +344,7 @@ def stream_claude(system_prompt: str, user_prompt: str):
 # 크레딧 표시
 # ─────────────────────────────────────────────
 def show_credits():
-    credits = st.session_state.credits
+    credits = get_current_bricks()
     if credits > 0:
         st.markdown(
             f'<div style="text-align:right;">'
@@ -401,6 +459,7 @@ def page_input():
     st.markdown("---")
 
     with st.form("birth_info"):
+        email = st.text_input("이메일", placeholder="hello@example.com")
         name = st.text_input("이름 (한글 또는 영문)", placeholder="홍길동")
 
         col1, col2 = st.columns(2)
@@ -426,13 +485,29 @@ def page_input():
         submitted = st.form_submit_button("설계도 열기", use_container_width=True)
 
         if submitted:
-            if not name:
+            if not email or "@" not in email:
+                st.error("이메일을 정확히 입력해주세요.")
+            elif not name:
                 st.error("이름을 입력해주세요.")
             elif not birth_time:
                 st.error("출생시간을 입력해주세요. 모르면 '모름'이라고 적어주세요.")
             else:
+                # Supabase 사용자 생성/조회
+                if USE_SUPABASE:
+                    db_user = get_or_create_user(
+                        email=email,
+                        name=name,
+                        birth_date=birth_date.strftime("%Y-%m-%d"),
+                        birth_time=birth_time,
+                        gender=gender,
+                    )
+                    st.session_state.db_user = db_user
+                    st.session_state.credits = db_user.get("bricks", 10)
+                    st.session_state.readings_done = db_user.get("total_readings", 0)
+
                 st.session_state.user_data = {
                     "name": name,
+                    "email": email,
                     "birth_date": birth_date.strftime("%Y년 %m월 %d일"),
                     "birth_time": birth_time,
                     "gender": gender,
@@ -462,11 +537,13 @@ def page_select_mode():
 
     st.markdown("")
 
+    current_bricks = get_current_bricks()
+
     col1, col2, col3 = st.columns(3)
 
     with col1:
         if st.button("🪞 전생 리딩", use_container_width=True):
-            if st.session_state.credits >= 7:
+            if current_bricks >= 7:
                 st.session_state.current_mode = "past_life"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -476,7 +553,7 @@ def page_select_mode():
 
     with col2:
         if st.button("🔑 운명 키워드", use_container_width=True):
-            if st.session_state.credits >= 7:
+            if current_bricks >= 7:
                 st.session_state.current_mode = "keywords"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -486,7 +563,7 @@ def page_select_mode():
 
     with col3:
         if st.button("🌅 오늘의 설계도", use_container_width=True):
-            if st.session_state.credits >= 7:
+            if current_bricks >= 7:
                 st.session_state.current_mode = "daily"
                 st.session_state.page = "reading"
                 st.rerun()
@@ -499,7 +576,7 @@ def page_select_mode():
         st.markdown("---")
         st.markdown(
             f'<p style="color:#a090b8; font-size:13px; text-align:center;">'
-            f'🧱 지금까지 {st.session_state.readings_done}회 리딩 · 벽돌 {st.session_state.credits}개 남음'
+            f'🧱 지금까지 {st.session_state.readings_done}회 리딩 · 벽돌 {current_bricks}개 남음'
             f'</p>',
             unsafe_allow_html=True
         )
@@ -540,8 +617,11 @@ def page_reading():
 
     # 첫 리딩이면 자동 실행
     if not st.session_state.chat_history:
-        # 크레딧 차감
-        st.session_state.credits -= CREDIT_COSTS[mode]
+        # 벽돌 차감
+        cost = CREDIT_COSTS[mode]
+        if not spend_bricks(cost, f"reading_{mode}"):
+            st.session_state.page = "no_credits"
+            st.rerun()
         st.session_state.readings_done += 1
 
         system_prompt, user_prompt = get_prompt(mode, user)
@@ -562,6 +642,11 @@ def page_reading():
             "content": full_response
         })
         st.session_state.last_reading = full_response
+
+        # 리딩 결과 DB 저장
+        if USE_SUPABASE and st.session_state.db_user:
+            save_reading(st.session_state.db_user["id"], mode, full_response, cost)
+
         st.rerun()
 
     # 심화 질문 입력
@@ -574,8 +659,8 @@ def page_reading():
             "content": question
         })
 
-        # 크레딧 체크
-        if st.session_state.credits < 3:
+        # 벽돌 체크
+        if get_current_bricks() < 3:
             no_credit_msg = (
                 "🧱 벽돌이 부족하다.\n\n"
                 "충전하고 다시 와. "
@@ -590,7 +675,7 @@ def page_reading():
             })
         else:
             # 심화 분석 실행
-            st.session_state.credits -= 3
+            spend_bricks(3, "reading_deep_dive")
             st.session_state.readings_done += 1
 
             system_prompt, user_prompt = get_prompt(
@@ -616,6 +701,10 @@ def page_reading():
                 "content": full_response
             })
             st.session_state.last_reading = full_response
+
+            # 심화 리딩 DB 저장
+            if USE_SUPABASE and st.session_state.db_user:
+                save_reading(st.session_state.db_user["id"], "deep_dive", full_response, 3)
 
         st.rerun()
 
@@ -670,10 +759,17 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("1개 충전", use_container_width=True, key="buy_1"):
-            # TODO: 결제 연동 (Stripe/토스)
-            st.session_state.credits += 1
-            st.session_state.page = "select_mode"
-            st.rerun()
+            if USE_STRIPE and st.session_state.db_user:
+                url = create_checkout_session(
+                    "brick_1",
+                    st.session_state.user_data.get("email", ""),
+                    st.session_state.db_user["id"],
+                )
+                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
+            else:
+                st.session_state.credits += 1
+                st.session_state.page = "select_mode"
+                st.rerun()
 
     with col2:
         st.markdown(
@@ -686,10 +782,17 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("10개 충전", use_container_width=True, key="buy_10"):
-            # TODO: 결제 연동
-            st.session_state.credits += 10
-            st.session_state.page = "select_mode"
-            st.rerun()
+            if USE_STRIPE and st.session_state.db_user:
+                url = create_checkout_session(
+                    "brick_10",
+                    st.session_state.user_data.get("email", ""),
+                    st.session_state.db_user["id"],
+                )
+                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
+            else:
+                st.session_state.credits += 10
+                st.session_state.page = "select_mode"
+                st.rerun()
 
     with col3:
         st.markdown(
@@ -702,10 +805,17 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("20개 충전", use_container_width=True, key="buy_20"):
-            # TODO: 결제 연동
-            st.session_state.credits += 20
-            st.session_state.page = "select_mode"
-            st.rerun()
+            if USE_STRIPE and st.session_state.db_user:
+                url = create_checkout_session(
+                    "brick_20",
+                    st.session_state.user_data.get("email", ""),
+                    st.session_state.db_user["id"],
+                )
+                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
+            else:
+                st.session_state.credits += 20
+                st.session_state.page = "select_mode"
+                st.rerun()
 
     st.markdown("")
     st.markdown(
