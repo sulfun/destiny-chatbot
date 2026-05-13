@@ -272,6 +272,53 @@ if "toss_order_id" not in st.session_state:
     st.session_state.toss_order_id = None
 
 # ─────────────────────────────────────────────
+# 환불정책 페이지 (토스 심사용)
+# ─────────────────────────────────────────────
+if st.query_params.get("page") == "refund":
+    st.markdown('<div class="architect-symbol">◈</div>', unsafe_allow_html=True)
+    st.markdown("# 환불 정책")
+    st.markdown("---")
+    st.markdown("""
+**서비스명:** The Architect — 운명 챗봇
+
+**사업자:** SULFUN (술펀)
+
+**서비스 설명:**
+AI 기반 운명 리딩 서비스입니다. 벽돌(크레딧)을 구매하여 전생 리딩, 운명 키워드 분석, 오늘의 설계도 등의 콘텐츠를 이용할 수 있습니다.
+
+**상품 구성 및 가격:**
+- 벽돌 1개: ₩1,000
+- 벽돌 10개: ₩9,500 (5% 할인)
+- 벽돌 20개: ₩17,900 (10% 할인)
+
+**서비스 제공 시점:**
+결제 완료 즉시 벽돌이 충전되며, 바로 리딩 서비스를 이용할 수 있습니다.
+
+**환불 규정:**
+1. **미사용 벽돌 전액 환불:** 구매한 벽돌을 하나도 사용하지 않은 경우, 결제일로부터 7일 이내 전액 환불이 가능합니다.
+2. **부분 사용 시:** 이미 벽돌을 사용하여 리딩 서비스를 이용한 경우, 사용한 벽돌에 해당하는 금액을 제외한 나머지 금액을 환불합니다.
+3. **디지털 콘텐츠 특성:** 리딩 결과는 디지털 콘텐츠로, 콘텐츠 열람 후에는 해당 벽돌에 대한 환불이 불가합니다.
+4. **환불 처리 기간:** 환불 요청 후 영업일 기준 3~5일 이내 처리됩니다.
+
+**환불 요청 방법:**
+이메일: help@sulfun.com
+
+**유효기간:**
+구매한 벽돌은 유효기간 없이 사용 가능합니다.
+
+**문의:**
+이메일: help@sulfun.com
+    """)
+    st.markdown("---")
+    st.markdown(
+        '<p style="text-align:center; color:#A78BDB55; font-size:12px; letter-spacing:3px;">'
+        'POWERED BY THE ARCHITECT · SULFUN'
+        '</p>',
+        unsafe_allow_html=True
+    )
+    st.stop()
+
+# ─────────────────────────────────────────────
 # 결제 완료 콜백 처리 (토스페이먼츠 redirect)
 # ─────────────────────────────────────────────
 query_params = st.query_params
