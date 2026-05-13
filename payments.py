@@ -1,15 +1,12 @@
 """
-Stripe 결제 모듈
-벽돌 충전을 위한 Checkout Session 생성
+토스페이먼츠 결제 모듈
+벽돌 충전을 위한 결제위젯 + 결제 승인
 """
 
-import stripe
+import requests
+import base64
+import uuid
 import streamlit as st
-
-
-def init_stripe():
-    """Stripe API 키 초기화"""
-    stripe.api_key = st.secrets["STRIPE_SECRET_KEY"]
 
 
 # ─────────────────────────────────────────────
@@ -39,65 +36,127 @@ BRICK_PRODUCTS = {
 
 
 # ─────────────────────────────────────────────
-# Stripe Checkout Session
+# 토스페이먼츠 결제위젯 HTML 생성
 # ─────────────────────────────────────────────
 
-def create_checkout_session(product_key: str, user_email: str, user_id: str) -> str:
+def get_toss_payment_widget_html(
+    product_key: str,
+    user_id: str,
+    user_email: str,
+    order_id: str,
+) -> str:
     """
-    Stripe Checkout Session 생성.
-    결제 완료 후 success_url로 리디렉트.
-    Returns: Checkout Session URL
+    토스페이먼츠 결제위젯 HTML을 반환.
+    Streamlit의 st.components.v1.html()로 렌더링.
     """
-    init_stripe()
-
     product = BRICK_PRODUCTS[product_key]
+    client_key = st.secrets.get("TOSS_CLIENT_KEY", "")
+    app_url = st.secrets.get("APP_URL", "https://destiny-chatbot.streamlit.app")
 
-    session = stripe.checkout.Session.create(
-        payment_method_types=["card"],
-        customer_email=user_email,
-        line_items=[{
-            "price_data": {
-                "currency": "krw",
-                "product_data": {
-                    "name": product["name"],
-                    "description": product["description"],
-                },
-                "unit_amount": product["price_krw"],  # KRW는 소수점 없음
-            },
-            "quantity": 1,
-        }],
-        mode="payment",
-        metadata={
-            "user_id": user_id,
-            "product_key": product_key,
-            "bricks": str(product["bricks"]),
-        },
-        success_url=st.secrets.get("APP_URL", "https://destiny-chatbot.streamlit.app")
-            + "?payment=success&session_id={CHECKOUT_SESSION_ID}",
-        cancel_url=st.secrets.get("APP_URL", "https://destiny-chatbot.streamlit.app")
-            + "?payment=cancel",
-    )
+    success_url = f"{app_url}?payment=success&orderId={order_id}&product_key={product_key}"
+    fail_url = f"{app_url}?payment=fail"
 
-    return session.url
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <script src="https://js.tosspayments.com/v2/standard"></script>
+    </head>
+    <body style="margin:0; padding:0; background:transparent;">
+        <div id="payment-method"></div>
+        <button id="payment-button" style="
+            background: linear-gradient(135deg, #2d1b4e 0%, #1a0e33 100%);
+            border: 1px solid #C5A0F044;
+            color: #C5A0F0;
+            font-family: 'Noto Sans KR', sans-serif;
+            font-weight: 600;
+            font-size: 16px;
+            border-radius: 8px;
+            padding: 12px 32px;
+            cursor: pointer;
+            width: 100%;
+            margin-top: 16px;
+        ">
+            {product['name']} 결제하기 (₩{product['price_krw']:,})
+        </button>
+        <script>
+            async function initPayment() {{
+                const tossPayments = TossPayments("{client_key}");
+                const widgets = tossPayments.widgets({{
+                    customerKey: "{user_id}",
+                }});
 
+                await widgets.setAmount({{
+                    currency: "KRW",
+                    value: {product['price_krw']},
+                }});
 
-def verify_payment(session_id: str) -> dict | None:
+                await widgets.renderPaymentMethods({{
+                    selector: "#payment-method",
+                    variantKey: "DEFAULT",
+                }});
+
+                document.getElementById("payment-button")
+                    .addEventListener("click", async function () {{
+                        await widgets.requestPayment({{
+                            orderId: "{order_id}",
+                            orderName: "{product['name']}",
+                            customerEmail: "{user_email}",
+                            successUrl: "{success_url}",
+                            failUrl: "{fail_url}",
+                        }});
+                    }});
+            }}
+            initPayment();
+        </script>
+    </body>
+    </html>
     """
-    결제 완료 확인.
-    Returns: {"user_id": ..., "bricks": ..., "product_key": ...} or None
+
+
+# ─────────────────────────────────────────────
+# 토스페이먼츠 결제 승인
+# ─────────────────────────────────────────────
+
+def confirm_toss_payment(payment_key: str, order_id: str, amount: int) -> dict | None:
     """
-    init_stripe()
+    토스페이먼츠 결제 승인 API 호출.
+    Returns: 승인 응답 dict or None (실패 시)
+    """
+    secret_key = st.secrets.get("TOSS_SECRET_KEY", "")
+    if not secret_key:
+        return None
+
+    # Basic Auth: secretKey + ":"
+    auth_string = base64.b64encode(f"{secret_key}:".encode()).decode()
 
     try:
-        session = stripe.checkout.Session.retrieve(session_id)
-        if session.payment_status == "paid":
-            return {
-                "user_id": session.metadata.get("user_id"),
-                "bricks": int(session.metadata.get("bricks", 0)),
-                "product_key": session.metadata.get("product_key"),
-                "session_id": session_id,
-            }
-    except Exception:
-        pass
+        response = requests.post(
+            "https://api.tosspayments.com/v1/payments/confirm",
+            headers={
+                "Authorization": f"Basic {auth_string}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "paymentKey": payment_key,
+                "orderId": order_id,
+                "amount": amount,
+            },
+            timeout=30,
+        )
 
-    return None
+        if response.status_code == 200:
+            return response.json()
+        else:
+            print(f"토스 결제 승인 실패: {response.status_code} — {response.text}")
+            return None
+
+    except Exception as e:
+        print(f"토스 결제 승인 오류: {e}")
+        return None
+
+
+def generate_order_id(product_key: str) -> str:
+    """고유 주문 ID 생성"""
+    short_uuid = str(uuid.uuid4()).replace("-", "")[:12]
+    return f"brick_{product_key}_{short_uuid}"

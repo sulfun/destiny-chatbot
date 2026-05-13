@@ -13,7 +13,11 @@ from database import (
     get_or_create_user, get_bricks, use_bricks, add_bricks,
     save_reading, get_reading_count
 )
-from payments import create_checkout_session, verify_payment
+from payments import (
+    BRICK_PRODUCTS, get_toss_payment_widget_html,
+    confirm_toss_payment, generate_order_id
+)
+import streamlit.components.v1 as components
 
 # ─────────────────────────────────────────────
 # 페이지 설정
@@ -232,7 +236,7 @@ hr {
 # Supabase 사용 여부 (키가 없으면 세션 모드로 폴백)
 # ─────────────────────────────────────────────
 USE_SUPABASE = all(k in st.secrets for k in ["SUPABASE_URL", "SUPABASE_SERVICE_KEY"])
-USE_STRIPE = all(k in st.secrets for k in ["STRIPE_SECRET_KEY"])
+USE_TOSS = all(k in st.secrets for k in ["TOSS_CLIENT_KEY", "TOSS_SECRET_KEY"])
 
 # ─────────────────────────────────────────────
 # 세션 상태 초기화
@@ -261,25 +265,49 @@ if "last_reading" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "intro"
 
+if "toss_product_key" not in st.session_state:
+    st.session_state.toss_product_key = None
+
+if "toss_order_id" not in st.session_state:
+    st.session_state.toss_order_id = None
+
 # ─────────────────────────────────────────────
-# 결제 완료 콜백 처리 (Stripe redirect)
+# 결제 완료 콜백 처리 (토스페이먼츠 redirect)
 # ─────────────────────────────────────────────
 query_params = st.query_params
-if query_params.get("payment") == "success" and USE_STRIPE:
-    session_id = query_params.get("session_id", "")
-    if session_id and st.session_state.db_user:
-        payment_info = verify_payment(session_id)
-        if payment_info:
-            add_bricks(
-                user_id=payment_info["user_id"],
-                amount=payment_info["bricks"],
-                reason=f"purchase_{payment_info['product_key']}",
-                stripe_session_id=payment_info["session_id"],
-            )
-            # 세션 벽돌도 동기화
-            st.session_state.credits = get_bricks(payment_info["user_id"])
-            st.query_params.clear()
-            st.toast(f"🧱 벽돌 {payment_info['bricks']}개 충전 완료!")
+if query_params.get("payment") == "success" and USE_TOSS:
+    payment_key = query_params.get("paymentKey", "")
+    order_id = query_params.get("orderId", "")
+    toss_amount = int(query_params.get("amount", "0"))
+    product_key = query_params.get("product_key", "")
+
+    if payment_key and order_id and product_key and st.session_state.db_user:
+        product = BRICK_PRODUCTS.get(product_key)
+        if product and toss_amount == product["price_krw"]:
+            # 토스 결제 승인 API 호출
+            result = confirm_toss_payment(payment_key, order_id, toss_amount)
+            if result and result.get("status") == "DONE":
+                bricks = product["bricks"]
+                user_id = st.session_state.db_user["id"]
+
+                add_bricks(
+                    user_id=user_id,
+                    amount=bricks,
+                    reason=f"purchase_{product_key}",
+                    stripe_session_id=order_id,  # 필드 재활용 (toss order_id)
+                )
+                st.session_state.credits = get_bricks(user_id)
+                st.query_params.clear()
+                st.toast(f"🧱 벽돌 {bricks}개 충전 완료!")
+            else:
+                st.query_params.clear()
+                st.toast("결제 승인에 실패했습니다. 다시 시도해주세요.", icon="⚠️")
+    else:
+        st.query_params.clear()
+
+elif query_params.get("payment") == "fail":
+    st.query_params.clear()
+    st.toast("결제가 취소되었습니다.", icon="⚠️")
 
 
 # ─────────────────────────────────────────────
@@ -726,9 +754,57 @@ def page_reading():
 
 
 # ─────────────────────────────────────────────
+# 결제 헬퍼
+# ─────────────────────────────────────────────
+def _handle_purchase(product_key: str):
+    """결제 버튼 클릭 시 처리"""
+    if USE_TOSS and st.session_state.db_user:
+        st.session_state.toss_product_key = product_key
+        st.session_state.toss_order_id = generate_order_id(product_key)
+        st.rerun()
+    else:
+        # 폴백: 토스 키 없으면 세션 크레딧 직접 추가 (개발/테스트용)
+        product = BRICK_PRODUCTS[product_key]
+        st.session_state.credits += product["bricks"]
+        st.session_state.page = "select_mode"
+        st.rerun()
+
+
+def _show_toss_payment_widget():
+    """토스페이먼츠 결제위젯 표시"""
+    product_key = st.session_state.toss_product_key
+    order_id = st.session_state.toss_order_id
+    product = BRICK_PRODUCTS[product_key]
+
+    st.markdown('<div class="architect-symbol">◈</div>', unsafe_allow_html=True)
+    st.markdown(f"### 🧱 {product['name']} 결제")
+    st.markdown("---")
+
+    # 토스 결제위젯 렌더링
+    widget_html = get_toss_payment_widget_html(
+        product_key=product_key,
+        user_id=str(st.session_state.db_user["id"]),
+        user_email=st.session_state.user_data.get("email", ""),
+        order_id=order_id,
+    )
+    components.html(widget_html, height=600, scrolling=True)
+
+    st.markdown("")
+    if st.button("← 돌아가기", use_container_width=True, key="back_from_payment"):
+        st.session_state.toss_product_key = None
+        st.session_state.toss_order_id = None
+        st.rerun()
+
+
+# ─────────────────────────────────────────────
 # 페이지: 크레딧 부족
 # ─────────────────────────────────────────────
 def page_no_credits():
+    # 결제위젯 모드 체크 — 버튼 클릭으로 진입
+    if st.session_state.get("toss_product_key"):
+        _show_toss_payment_widget()
+        return
+
     st.markdown('<div class="architect-symbol">◈</div>', unsafe_allow_html=True)
     st.markdown("### 🧱 벽돌이 부족합니다")
     st.markdown("---")
@@ -759,17 +835,7 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("1개 충전", use_container_width=True, key="buy_1"):
-            if USE_STRIPE and st.session_state.db_user:
-                url = create_checkout_session(
-                    "brick_1",
-                    st.session_state.user_data.get("email", ""),
-                    st.session_state.db_user["id"],
-                )
-                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
-            else:
-                st.session_state.credits += 1
-                st.session_state.page = "select_mode"
-                st.rerun()
+            _handle_purchase("brick_1")
 
     with col2:
         st.markdown(
@@ -782,17 +848,7 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("10개 충전", use_container_width=True, key="buy_10"):
-            if USE_STRIPE and st.session_state.db_user:
-                url = create_checkout_session(
-                    "brick_10",
-                    st.session_state.user_data.get("email", ""),
-                    st.session_state.db_user["id"],
-                )
-                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
-            else:
-                st.session_state.credits += 10
-                st.session_state.page = "select_mode"
-                st.rerun()
+            _handle_purchase("brick_10")
 
     with col3:
         st.markdown(
@@ -805,17 +861,7 @@ def page_no_credits():
             unsafe_allow_html=True
         )
         if st.button("20개 충전", use_container_width=True, key="buy_20"):
-            if USE_STRIPE and st.session_state.db_user:
-                url = create_checkout_session(
-                    "brick_20",
-                    st.session_state.user_data.get("email", ""),
-                    st.session_state.db_user["id"],
-                )
-                st.markdown(f'<meta http-equiv="refresh" content="0;url={url}">', unsafe_allow_html=True)
-            else:
-                st.session_state.credits += 20
-                st.session_state.page = "select_mode"
-                st.rerun()
+            _handle_purchase("brick_20")
 
     st.markdown("")
     st.markdown(
